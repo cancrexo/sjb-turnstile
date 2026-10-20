@@ -1,0 +1,103 @@
+.sjb-turnstile-tab {
+    padding-top: 1.5rem;
+}
+
+.sjb-turnstile-tab .notice {
+    margin: 1em 0;
+}
+
+.sjb-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.sjb-switch input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: 44px;
+    height: 24px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.sjb-switch-track {
+    position: absolute;
+    inset: 0;
+    background: #c3c4c7;
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+.sjb-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .15s ease;
+}
+
+.sjb-switch input:checked + .sjb-switch-track {
+    background: #2271b1;
+}
+
+.sjb-switch input:checked + .sjb-switch-track::after {
+    transform: translateX(20px);
+}
+
+.sjb-switch input:focus + .sjb-switch-track {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1;
+}
+
+.sjb-turnstile-tab .notice[hidden],
+#sjb-turnstile-log-empty[hidden],
+#sjb-turnstile-log-count[hidden],
+#sjb-turnstile-log-table[hidden] {
+    display: none;
+}
+
+.sjb-turnstile-log-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+}
+
+.sjb-turnstile-log {
+    margin-top: 1.5rem;
+}
+
+.sjb-toast-wrap {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 100001;
+}
+
+.sjb-toast {
+    min-width: 240px;
+    max-width: 360px;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.sjb-toast-success {
+    background: #1e7a46;
+}
+
+.sjb-toast-error {
+    background: #b32d2e;
+}
+
+.sjb-toast-warning {
+    background: #996800;
+}
