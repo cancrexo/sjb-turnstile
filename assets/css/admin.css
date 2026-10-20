@@ -64,6 +64,29 @@
     display: none;
 }
 
+.sjb-turnstile-tab .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 8px;
+}
+
+.sjb-turnstile-tab .button .dashicons {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 16px;
+    flex: 0 0 16px;
+}
+
+.sjb-turnstile-tab .button-primary .dashicons {
+    width: 19.2px;
+    height: 19.2px;
+    font-size: 19.2px;
+    line-height: 19.2px;
+    flex-basis: 19.2px;
+}
+
 .sjb-turnstile-log-actions {
     display: flex;
     gap: 0.5rem;

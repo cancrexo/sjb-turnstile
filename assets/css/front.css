@@ -1,0 +1,19 @@
+.sjb-turnstile {
+    width: 100%;
+    max-width: 100%;
+    margin: 1em 0;
+    box-sizing: border-box;
+    container-type: inline-size;
+    overflow: hidden;
+}
+
+/* El widget nace a 300px y se escala al ancho del formulario. */
+.sjb-turnstile .cf-turnstile {
+    width: 300px !important;
+    min-width: 300px !important;
+    max-width: none !important;
+    height: 65px;
+    transform: scale(calc(100cqw / 300px));
+    transform-origin: top left;
+    margin-bottom: calc((65px * 100cqw / 300px) - 65px);
+}

@@ -207,6 +207,13 @@ class SJB_Turnstile {
             null,
             true
         );
+
+        wp_enqueue_style(
+            self::SLUG,
+            plugins_url( 'assets/css/front.css', __FILE__ ),
+            array(),
+            (string) filemtime( __DIR__ . '/assets/css/front.css' )
+        );
     }
 
     /**
@@ -219,8 +226,8 @@ class SJB_Turnstile {
 
         $this->enqueue_api();
 
-        return '<div class="sjb-turnstile" style="margin:1em 0;">'
-            . '<div class="cf-turnstile" data-sitekey="' . esc_attr( $this->options()['site_key'] ) . '" data-theme="auto"></div>'
+        return '<div class="sjb-turnstile">'
+            . '<div class="cf-turnstile" data-sitekey="' . esc_attr( $this->options()['site_key'] ) . '" data-theme="auto" data-size="normal"></div>'
             . '</div>';
     }
 
@@ -706,7 +713,7 @@ class SJB_Turnstile {
             self::SLUG . '-admin',
             plugins_url( 'assets/css/admin.css', __FILE__ ),
             array(),
-            self::VERSION
+            (string) filemtime( __DIR__ . '/assets/css/admin.css' )
         );
 
         wp_enqueue_script(
@@ -759,6 +766,16 @@ class SJB_Turnstile {
         );
 
         return $links;
+    }
+
+    /**
+     * Botón de guardar con el icono delante del texto.
+     */
+    private function render_save_button(): void {
+        echo '<p class="submit"><button type="submit" class="button button-primary">';
+        echo '<span class="dashicons dashicons-cloud-saved" aria-hidden="true"></span>';
+        echo esc_html__( 'Guardar cambios', 'sjb-turnstile' );
+        echo '</button></p>';
     }
 
     /**
@@ -840,7 +857,7 @@ class SJB_Turnstile {
                             </td>
                         </tr>
                     </table>
-                    <?php submit_button(); ?>
+                    <?php $this->render_save_button(); ?>
                 </form>
             <?php elseif ( 'configuracion' === $tab ) : ?>
                 <p class="description">
@@ -868,7 +885,7 @@ class SJB_Turnstile {
                             </tr>
                         <?php endforeach; ?>
                     </table>
-                    <?php submit_button(); ?>
+                    <?php $this->render_save_button(); ?>
                 </form>
             <?php elseif ( 'info' === $tab ) : ?>
                 <p class="description">
@@ -902,10 +919,16 @@ class SJB_Turnstile {
                         </tr>
                     </table>
                     <p class="sjb-turnstile-log-actions">
-                        <button type="button" class="button" id="sjb-turnstile-export"><?php esc_html_e( 'Exportar', 'sjb-turnstile' ); ?></button>
-                        <button type="button" class="button" id="sjb-turnstile-empty"><?php esc_html_e( 'Vaciar registros', 'sjb-turnstile' ); ?></button>
+                        <button type="button" class="button" id="sjb-turnstile-export">
+                            <span class="dashicons dashicons-download" aria-hidden="true"></span>
+                            <?php esc_html_e( 'Exportar', 'sjb-turnstile' ); ?>
+                        </button>
+                        <button type="button" class="button" id="sjb-turnstile-empty">
+                            <span class="dashicons dashicons-trash" aria-hidden="true"></span>
+                            <?php esc_html_e( 'Vaciar registros', 'sjb-turnstile' ); ?>
+                        </button>
                     </p>
-                    <?php submit_button( __( 'Guardar cambios', 'sjb-turnstile' ) ); ?>
+                    <?php $this->render_save_button(); ?>
                 </form>
                 <div class="sjb-turnstile-log">
                     <p id="sjb-turnstile-log-empty"<?php echo $log['total'] > 0 ? ' hidden' : ''; ?>>
