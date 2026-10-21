@@ -48,8 +48,8 @@ class SJB_Turnstile {
     /** @var string */
     private const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
-    /** Intentos que se listan en la pestaña Info. */
-    private const LOG_LIMIT = 100;
+    /** Intentos por página en la pestaña Configuración. */
+    private const LOG_LIMIT = 20;
 
     /** @var self|null */
     protected static $instance = null;
@@ -437,7 +437,7 @@ class SJB_Turnstile {
     }
 
     /**
-     * Guarda un intento si el interruptor de Info está encendido.
+     * Guarda un intento si el interruptor de Configuración está encendido.
      */
     private function log_attempt( string $form, bool $ok ): void {
         if ( '1' !== $this->options()['log'] ) {
@@ -510,34 +510,156 @@ class SJB_Turnstile {
     }
 
     /**
-     * Últimos intentos para la pestaña Info.
-     *
-     * @return array{rows:array<int,array<string,string>>,total:int}
+     * Tamaño de página permitido: 20, 50 o 100.
      */
-    private function recent_logs(): array {
+    private function per_page( $value ): int {
+        $n = absint( $value );
+
+        return in_array( $n, array( 20, 50, 100 ), true ) ? $n : self::LOG_LIMIT;
+    }
+
+    /**
+     * Una página de intentos, los más recientes primero.
+     *
+     * @return array{rows:array<int,array<string,string>>,total:int,page:int,per_page:int,pages:int}
+     */
+    private function recent_logs( int $page = 1, int $per_page = self::LOG_LIMIT ): array {
         global $wpdb;
 
+        $per_page = $this->per_page( $per_page );
+        $empty    = array(
+            'rows'        => array(),
+            'total'       => 0,
+            'page'        => 1,
+            'per_page'    => $per_page,
+            'pages'       => 1,
+            'total_label' => __( 'Total 0 registros.', 'sjb-turnstile' ),
+        );
+
         if ( '1' !== get_option( self::DB_OPTION, '' ) ) {
-            return array(
-                'rows'  => array(),
-                'total' => 0,
-            );
+            return $empty;
         }
 
         $table = self::log_table();
         $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table}`" );
-        $rows  = $wpdb->get_results(
+        $pages = max( 1, (int) ceil( $total / $per_page ) );
+        $page  = min( max( 1, $page ), $pages );
+
+        $rows = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT created_at, ip, result, page FROM `{$table}` ORDER BY id DESC LIMIT %d",
-                self::LOG_LIMIT
+                "SELECT created_at, ip, result, page FROM `{$table}` ORDER BY id DESC LIMIT %d OFFSET %d",
+                $per_page,
+                ( $page - 1 ) * $per_page
             ),
             ARRAY_A
         );
 
         return array(
-            'rows'  => is_array( $rows ) ? $rows : array(),
-            'total' => $total,
+            'rows'        => is_array( $rows ) ? $rows : array(),
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $per_page,
+            'pages'       => $pages,
+            'total_label' => sprintf(
+                /* translators: %d: número de intentos. */
+                _n( 'Total %d registro.', 'Total %d registros.', $total, 'sjb-turnstile' ),
+                $total
+            ),
         );
+    }
+
+    /**
+     * Filas de la tabla de intentos.
+     *
+     * @param array<int,array<string,string>> $rows
+     */
+    private function log_rows_html( array $rows ): string {
+        $html = '';
+        foreach ( $rows as $row ) {
+            $result = 'ok' === ( $row['result'] ?? '' )
+                ? __( 'Aceptado', 'sjb-turnstile' )
+                : __( 'Rechazado', 'sjb-turnstile' );
+            $html  .= '<tr>';
+            $html  .= '<td>' . esc_html( mysql2date( 'd/m/Y H:i', (string) $row['created_at'] ) ) . '</td>';
+            $html  .= '<td>' . esc_html( (string) $row['ip'] ) . '</td>';
+            $html  .= '<td>' . esc_html( $result ) . '</td>';
+            $html  .= '<td>' . esc_html( (string) $row['page'] ) . '</td>';
+            $html  .= '</tr>';
+        }
+
+        return $html;
+    }
+
+    /**
+     * Números de página visibles: ventana y puntos suspensivos.
+     *
+     * @return array<int,int|string>
+     */
+    private function pager_items( int $page, int $pages ): array {
+        if ( $pages <= 7 ) {
+            return range( 1, $pages );
+        }
+
+        $start = 2;
+        $end   = 7;
+        if ( $page > 4 && $page < $pages - 3 ) {
+            $start = $page - 2;
+            $end   = $page + 2;
+        } elseif ( $page >= $pages - 3 ) {
+            $start = $pages - 6;
+            $end   = $pages - 1;
+        }
+
+        $items = array( 1 );
+        if ( $start > 2 ) {
+            $items[] = '…';
+        }
+        for ( $i = $start; $i <= $end; $i++ ) {
+            $items[] = $i;
+        }
+        if ( $end < $pages - 1 ) {
+            $items[] = '…';
+        }
+        $items[] = $pages;
+
+        return $items;
+    }
+
+    /**
+     * Paginador: anterior, números, siguiente y tamaño de página.
+     *
+     * @param array{page:int,pages:int,per_page:int,total:int} $log
+     */
+    private function log_pager_html( array $log ): string {
+        if ( $log['total'] < 1 ) {
+            return '';
+        }
+
+        $page  = (int) $log['page'];
+        $pages = (int) $log['pages'];
+        $html  = '';
+
+        $prev = $page > 1 ? $page - 1 : 0;
+        $next = $page < $pages ? $page + 1 : 0;
+        $html .= '<button type="button" class="sjb-pager-btn" data-page="' . $prev . '"' . ( $prev ? '' : ' disabled' ) . '>&laquo;</button>';
+
+        foreach ( $this->pager_items( $page, $pages ) as $item ) {
+            if ( '…' === $item ) {
+                $html .= '<span class="sjb-pager-gap">&hellip;</span>';
+                continue;
+            }
+            $current = ( (int) $item === $page ) ? ' is-current' : '';
+            $html   .= '<button type="button" class="sjb-pager-btn' . $current . '" data-page="' . (int) $item . '">' . (int) $item . '</button>';
+        }
+
+        $html .= '<button type="button" class="sjb-pager-btn" data-page="' . $next . '"' . ( $next ? '' : ' disabled' ) . '>&raquo;</button>';
+        $html .= '<select id="sjb-turnstile-per-page" aria-label="' . esc_attr__( 'Registros por página', 'sjb-turnstile' ) . '">';
+        foreach ( array( 20, 50, 100 ) as $size ) {
+            $html .= '<option value="' . $size . '"' . selected( $log['per_page'], $size, false ) . '>' . $size . '</option>';
+        }
+        $html .= '</select>';
+
+        return $html;
     }
 
     /**
@@ -589,26 +711,26 @@ class SJB_Turnstile {
             );
         }
 
-        if ( 'save_configuracion' === $task ) {
+        if ( 'save_visualizacion' === $task ) {
             foreach ( array_keys( $this->forms() ) as $form ) {
                 $options[ $form ] = ( isset( $_POST[ $form ] ) && '1' === (string) wp_unslash( $_POST[ $form ] ) ) ? '1' : '0';
             }
             update_option( self::OPTION, $options );
             wp_send_json_success(
                 array(
-                    'message' => __( 'Configuración guardada.', 'sjb-turnstile' ),
+                    'message' => __( 'Visualización guardada.', 'sjb-turnstile' ),
                     'level'   => 'success',
                 )
             );
         }
 
-        if ( 'save_info' === $task ) {
+        if ( 'save_configuracion' === $task ) {
             $options['log']      = ( isset( $_POST['log'] ) && '1' === (string) wp_unslash( $_POST['log'] ) ) ? '1' : '0';
             $options['drop_log'] = ( isset( $_POST['drop_log'] ) && '1' === (string) wp_unslash( $_POST['drop_log'] ) ) ? '1' : '0';
             update_option( self::OPTION, $options );
             wp_send_json_success(
                 array(
-                    'message' => __( 'Opciones de Info guardadas.', 'sjb-turnstile' ),
+                    'message' => __( 'Configuración guardada.', 'sjb-turnstile' ),
                     'level'   => 'success',
                 )
             );
@@ -651,6 +773,22 @@ class SJB_Turnstile {
                     'level'    => 'success',
                     'filename' => 'sjb-turnstile-' . wp_date( 'Ymd-His' ) . '.json',
                     'records'  => $rows,
+                )
+            );
+        }
+
+        if ( 'list_log' === $task ) {
+            $page = isset( $_POST['page'] ) ? absint( wp_unslash( $_POST['page'] ) ) : 1;
+            $per  = isset( $_POST['per_page'] ) ? absint( wp_unslash( $_POST['per_page'] ) ) : self::LOG_LIMIT;
+            $log  = $this->recent_logs( $page, $per );
+
+            wp_send_json_success(
+                array(
+                    'silent'      => true,
+                    'body'        => $this->log_rows_html( $log['rows'] ),
+                    'pager'       => $this->log_pager_html( $log ),
+                    'total'       => $log['total'],
+                    'total_label' => $log['total_label'],
                 )
             );
         }
@@ -720,7 +858,7 @@ class SJB_Turnstile {
             self::SLUG . '-admin',
             plugins_url( 'assets/js/admin.js', __FILE__ ),
             array(),
-            self::VERSION,
+            (string) filemtime( __DIR__ . '/assets/js/admin.js' ),
             true
         );
 
@@ -779,7 +917,7 @@ class SJB_Turnstile {
     }
 
     /**
-     * Pantalla de ajustes: Cloudflare, Configuración, Info y Acerca de.
+     * Pantalla de ajustes: Cloudflare, Visualización, Configuración y Acerca de.
      */
     public function render_admin_page(): void {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -788,13 +926,13 @@ class SJB_Turnstile {
 
         $tabs = array(
             'cloudflare'    => __( 'Cloudflare', 'sjb-turnstile' ),
+            'visualizacion' => __( 'Visualización', 'sjb-turnstile' ),
             'configuracion' => __( 'Configuración', 'sjb-turnstile' ),
-            'info'          => __( 'Info', 'sjb-turnstile' ),
             'acerca-de'     => __( 'Acerca de', 'sjb-turnstile' ),
         );
         $tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'cloudflare';
-        if ( 'proximamente' === $tab ) {
-            $tab = 'info';
+        if ( 'proximamente' === $tab || 'info' === $tab ) {
+            $tab = 'configuracion';
         }
         if ( ! isset( $tabs[ $tab ] ) ) {
             $tab = 'cloudflare';
@@ -802,7 +940,7 @@ class SJB_Turnstile {
 
         $base    = admin_url( 'options-general.php?page=' . self::SLUG );
         $options = $this->options();
-        $log     = ( 'info' === $tab ) ? $this->recent_logs() : array( 'rows' => array(), 'total' => 0 );
+        $log     = ( 'configuracion' === $tab ) ? $this->recent_logs() : array( 'rows' => array(), 'total' => 0 );
         ?>
         <div class="wrap">
             <h1>SJB Turnstile</h1>
@@ -859,11 +997,11 @@ class SJB_Turnstile {
                     </table>
                     <?php $this->render_save_button(); ?>
                 </form>
-            <?php elseif ( 'configuracion' === $tab ) : ?>
+            <?php elseif ( 'visualizacion' === $tab ) : ?>
                 <p class="description">
                     <?php esc_html_e( 'Con el interruptor apagado, esa pantalla no muestra Turnstile ni lo exige al enviar.', 'sjb-turnstile' ); ?>
                 </p>
-                <form method="post" action="#" class="sjb-turnstile-form" data-task="save_configuracion">
+                <form method="post" action="#" class="sjb-turnstile-form" data-task="save_visualizacion">
                     <table class="form-table" role="presentation">
                         <?php foreach ( $this->forms() as $key => $label ) : ?>
                             <tr>
@@ -887,11 +1025,11 @@ class SJB_Turnstile {
                     </table>
                     <?php $this->render_save_button(); ?>
                 </form>
-            <?php elseif ( 'info' === $tab ) : ?>
+            <?php elseif ( 'configuracion' === $tab ) : ?>
                 <p class="description">
                     <?php esc_html_e( 'Con el registro apagado no se guarda ningún intento.', 'sjb-turnstile' ); ?>
                 </p>
-                <form method="post" action="#" class="sjb-turnstile-form" data-task="save_info">
+                <form method="post" action="#" class="sjb-turnstile-form" data-task="save_configuracion">
                     <table class="form-table" role="presentation">
                         <tr>
                             <th scope="row">
@@ -931,20 +1069,12 @@ class SJB_Turnstile {
                     <?php $this->render_save_button(); ?>
                 </form>
                 <div class="sjb-turnstile-log">
+                    <div class="sjb-log-loading" id="sjb-turnstile-log-loading" role="status" hidden>
+                        <span class="sjb-log-spinner" aria-hidden="true"></span>
+                        <span><?php esc_html_e( 'Espera, por favor…', 'sjb-turnstile' ); ?></span>
+                    </div>
                     <p id="sjb-turnstile-log-empty"<?php echo $log['total'] > 0 ? ' hidden' : ''; ?>>
                         <?php esc_html_e( 'Todavía no hay intentos.', 'sjb-turnstile' ); ?>
-                    </p>
-                    <p id="sjb-turnstile-log-count" class="description"<?php echo $log['total'] > self::LOG_LIMIT ? '' : ' hidden'; ?>>
-                        <?php
-                        echo esc_html(
-                            sprintf(
-                                /* translators: 1: filas visibles, 2: total de intentos. */
-                                __( 'Mostrando los %1$d últimos de %2$d.', 'sjb-turnstile' ),
-                                self::LOG_LIMIT,
-                                (int) $log['total']
-                            )
-                        );
-                        ?>
                     </p>
                     <table class="widefat striped" id="sjb-turnstile-log-table"<?php echo $log['total'] > 0 ? '' : ' hidden'; ?>>
                         <thead>
@@ -956,24 +1086,15 @@ class SJB_Turnstile {
                             </tr>
                         </thead>
                         <tbody id="sjb-turnstile-log-body">
-                            <?php foreach ( $log['rows'] as $row ) : ?>
-                                <tr>
-                                    <td><?php echo esc_html( mysql2date( 'd/m/Y H:i', (string) $row['created_at'] ) ); ?></td>
-                                    <td><?php echo esc_html( (string) $row['ip'] ); ?></td>
-                                    <td>
-                                        <?php
-                                        echo esc_html(
-                                            'ok' === $row['result']
-                                                ? __( 'Aceptado', 'sjb-turnstile' )
-                                                : __( 'Rechazado', 'sjb-turnstile' )
-                                        );
-                                        ?>
-                                    </td>
-                                    <td><?php echo esc_html( (string) $row['page'] ); ?></td>
-                                </tr>
-                            <?php endforeach; ?>
+                            <?php echo $this->log_rows_html( $log['rows'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- cada celda se escapa en log_rows_html(). ?>
                         </tbody>
                     </table>
+                    <nav class="sjb-pager" id="sjb-turnstile-pager" aria-label="<?php esc_attr_e( 'Paginación de intentos', 'sjb-turnstile' ); ?>"<?php echo $log['total'] > 0 ? '' : ' hidden'; ?>>
+                        <?php echo $this->log_pager_html( $log ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- el HTML se escapa en log_pager_html(). ?>
+                    </nav>
+                    <p class="sjb-pager-total" id="sjb-turnstile-log-total"<?php echo $log['total'] > 0 ? '' : ' hidden'; ?>>
+                        <?php echo esc_html( $log['total_label'] ); ?>
+                    </p>
                 </div>
             <?php else : ?>
                 <table class="form-table" role="presentation">

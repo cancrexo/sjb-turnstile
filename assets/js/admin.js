@@ -57,7 +57,13 @@
                 const level = data.level || (payload.success ? 'success' : 'error');
                 const message = data.message || window.sjbTurnstile.i18n.network;
 
-                show(level, message);
+                if (!data.silent) {
+                    show(level, message);
+                }
+
+                if (task === 'list_log' && payload.success) {
+                    paintLog(data);
+                }
 
                 if (task === 'save_cloudflare') {
                     const notice = document.getElementById('sjb-turnstile-keys-notice');
@@ -77,23 +83,12 @@
                 }
 
                 if (task === 'empty_log' && level === 'success') {
-                    const table = document.getElementById('sjb-turnstile-log-table');
-                    const empty = document.getElementById('sjb-turnstile-log-empty');
-                    const count = document.getElementById('sjb-turnstile-log-count');
-                    const tbody = document.getElementById('sjb-turnstile-log-body');
-
-                    if (tbody) {
-                        tbody.textContent = '';
-                    }
-                    if (table) {
-                        table.hidden = true;
-                    }
-                    if (count) {
-                        count.hidden = true;
-                    }
-                    if (empty) {
-                        empty.hidden = false;
-                    }
+                    paintLog({
+                        body: '',
+                        pager: '',
+                        total: 0,
+                        total_label: '',
+                    });
                 }
 
                 return payload;
@@ -138,6 +133,92 @@
             request('export_log', {}).finally(function () {
                 exportButton.disabled = false;
             });
+        });
+    }
+
+    /**
+     * Sustituye filas, paginador y total. Sin registros oculta la tabla.
+     *
+     * @param {{body?: string, pager?: string, total?: number, total_label?: string}} data
+     */
+    function paintLog(data) {
+        const table = document.getElementById('sjb-turnstile-log-table');
+        const empty = document.getElementById('sjb-turnstile-log-empty');
+        const tbody = document.getElementById('sjb-turnstile-log-body');
+        const pager = document.getElementById('sjb-turnstile-pager');
+        const total = document.getElementById('sjb-turnstile-log-total');
+        const has = (data.total || 0) > 0;
+
+        if (tbody) {
+            tbody.innerHTML = data.body || '';
+        }
+        if (pager) {
+            pager.innerHTML = data.pager || '';
+            pager.hidden = !has;
+        }
+        if (total) {
+            total.textContent = data.total_label || '';
+            total.hidden = !has;
+        }
+        if (table) {
+            table.hidden = !has;
+        }
+        if (empty) {
+            empty.hidden = has;
+        }
+    }
+
+    let logLoading = false;
+
+    /**
+     * Muestra u oculta el aviso de espera sobre la tabla.
+     *
+     * @param {boolean} on
+     */
+    function setLogLoading(on) {
+        const loading = document.getElementById('sjb-turnstile-log-loading');
+        logLoading = on;
+        if (loading) {
+            loading.hidden = !on;
+        }
+    }
+
+    /**
+     * Pide una página del registro por AJAX. No recarga la pantalla ni muestra toast.
+     *
+     * @param {string|number} page
+     */
+    function loadLog(page) {
+        if (logLoading) {
+            return;
+        }
+
+        const perPage = document.getElementById('sjb-turnstile-per-page');
+        setLogLoading(true);
+
+        request('list_log', {
+            page: String(page),
+            per_page: perPage ? perPage.value : '20',
+        }).finally(function () {
+            setLogLoading(false);
+        });
+    }
+
+    const logBox = document.querySelector('.sjb-turnstile-log');
+    if (logBox) {
+        logBox.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-page]');
+            if (!button || button.disabled || button.getAttribute('data-page') === '0' || logLoading) {
+                return;
+            }
+
+            loadLog(button.getAttribute('data-page'));
+        });
+
+        logBox.addEventListener('change', function (event) {
+            if (event.target.id === 'sjb-turnstile-per-page' && !logLoading) {
+                loadLog(1);
+            }
         });
     }
 
