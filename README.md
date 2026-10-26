@@ -32,7 +32,7 @@ Los formularios se guardan por AJAX, sin recargar la página. El resultado sale 
 
 | Pestaña | Qué hay |
 |---------|---------|
-| Cloudflare | Site key y secret key. Sin las dos, Turnstile no se aplica. |
+| Cloudflare | Site key y secret key. Sin las dos, Turnstile no se aplica. **Probar** muestra el widget y comprueba las claves sin guardarlas. |
 | Visualización | Un interruptor por formulario: login, registro, recuperar contraseña y comentarios. Salen encendidos. |
 | Configuración | Registro de intentos, borrar la tabla al desinstalar, exportar y vaciar. |
 | Acerca de | Autor, versión y fecha. |

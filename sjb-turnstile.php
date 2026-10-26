@@ -275,8 +275,10 @@ class SJB_Turnstile {
 
     /**
      * Comprueba el token del POST contra Cloudflare.
+     *
+     * @param string $secret Secret key a usar. Vacía: la que está guardada.
      */
-    private function token_is_valid(): bool {
+    private function token_is_valid( string $secret = '' ): bool {
         $token = isset( $_POST['cf-turnstile-response'] )
             ? sanitize_text_field( wp_unslash( $_POST['cf-turnstile-response'] ) )
             : '';
@@ -285,12 +287,16 @@ class SJB_Turnstile {
             return false;
         }
 
+        if ( '' === $secret ) {
+            $secret = $this->options()['secret_key'];
+        }
+
         $response = wp_remote_post(
             self::VERIFY_URL,
             array(
                 'timeout' => 8,
                 'body'    => array(
-                    'secret'   => $this->options()['secret_key'],
+                    'secret'   => $secret,
                     'response' => $token,
                     'remoteip' => $this->client_ip(),
                 ),
@@ -711,6 +717,36 @@ class SJB_Turnstile {
             );
         }
 
+        if ( 'test_keys' === $task ) {
+            $site   = isset( $_POST['site_key'] ) ? sanitize_text_field( wp_unslash( $_POST['site_key'] ) ) : '';
+            $secret = isset( $_POST['secret_key'] ) ? sanitize_text_field( wp_unslash( $_POST['secret_key'] ) ) : '';
+
+            if ( '' === $site || '' === $secret ) {
+                wp_send_json_success(
+                    array(
+                        'message' => __( 'Escribe la site key y la secret key para probar.', 'sjb-turnstile' ),
+                        'level'   => 'warning',
+                    )
+                );
+            }
+
+            if ( $this->token_is_valid( $secret ) ) {
+                wp_send_json_success(
+                    array(
+                        'message' => __( 'Turnstile responde bien con estas claves.', 'sjb-turnstile' ),
+                        'level'   => 'success',
+                    )
+                );
+            }
+
+            wp_send_json_error(
+                array(
+                    'message' => __( 'Cloudflare ha rechazado la prueba. Revisa las claves y que este dominio esté autorizado en el widget.', 'sjb-turnstile' ),
+                    'level'   => 'error',
+                )
+            );
+        }
+
         if ( 'save_visualizacion' === $task ) {
             foreach ( array_keys( $this->forms() ) as $form ) {
                 $options[ $form ] = ( isset( $_POST[ $form ] ) && '1' === (string) wp_unslash( $_POST[ $form ] ) ) ? '1' : '0';
@@ -872,6 +908,8 @@ class SJB_Turnstile {
                 'i18n'    => array(
                     'network'      => __( 'No se ha podido completar la petición.', 'sjb-turnstile' ),
                     'confirmEmpty' => __( '¿Vaciar todos los registros? Esta acción no se puede deshacer.', 'sjb-turnstile' ),
+                    'testKeys'     => __( 'Escribe la site key y la secret key para probar.', 'sjb-turnstile' ),
+                    'testWidget'   => __( 'El widget no ha podido cargarse. Revisa la site key y que este dominio esté autorizado en Cloudflare.', 'sjb-turnstile' ),
                 ),
             )
         );
@@ -995,7 +1033,20 @@ class SJB_Turnstile {
                             </td>
                         </tr>
                     </table>
-                    <?php $this->render_save_button(); ?>
+                    <p class="submit sjb-turnstile-key-actions">
+                        <button type="button" class="button" id="sjb-turnstile-test">
+                            <span class="dashicons dashicons-visibility" aria-hidden="true"></span>
+                            <?php esc_html_e( 'Probar', 'sjb-turnstile' ); ?>
+                        </button>
+                        <button type="submit" class="button button-primary">
+                            <span class="dashicons dashicons-cloud-saved" aria-hidden="true"></span>
+                            <?php esc_html_e( 'Guardar cambios', 'sjb-turnstile' ); ?>
+                        </button>
+                    </p>
+                    <div id="sjb-turnstile-test-box" class="sjb-turnstile-test" hidden>
+                        <p class="description"><?php esc_html_e( 'Completa la comprobación. No se guardan las claves.', 'sjb-turnstile' ); ?></p>
+                        <div id="sjb-turnstile-test-widget"></div>
+                    </div>
                 </form>
             <?php elseif ( 'visualizacion' === $tab ) : ?>
                 <p class="description">

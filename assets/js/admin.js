@@ -2,6 +2,38 @@
     let toastTimer = 0;
 
     /**
+     * Aviso abajo a la derecha.
+     *
+     * @param {string} level
+     * @param {string} message
+     */
+    function show(level, message) {
+        const allowed = ['success', 'error', 'warning'];
+        const safeLevel = allowed.indexOf(level) === -1 ? 'error' : level;
+        let wrap = document.getElementById('sjb-turnstile-toasts');
+
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'sjb-turnstile-toasts';
+            wrap.className = 'sjb-toast-wrap';
+            document.body.appendChild(wrap);
+        }
+
+        wrap.textContent = '';
+
+        const item = document.createElement('div');
+        item.className = 'sjb-toast sjb-toast-' + safeLevel;
+        item.setAttribute('role', 'status');
+        item.textContent = message;
+        wrap.appendChild(item);
+
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(function () {
+            item.remove();
+        }, 4000);
+    }
+
+    /**
      * Envía un task a la rutina AJAX única y muestra el toast de la respuesta.
      *
      * @param {string} task
@@ -17,32 +49,6 @@
         Object.keys(fields).forEach(function (key) {
             body.append(key, fields[key]);
         });
-
-        const show = function (level, message) {
-            const allowed = ['success', 'error', 'warning'];
-            const safeLevel = allowed.indexOf(level) === -1 ? 'error' : level;
-            let wrap = document.getElementById('sjb-turnstile-toasts');
-
-            if (!wrap) {
-                wrap = document.createElement('div');
-                wrap.id = 'sjb-turnstile-toasts';
-                wrap.className = 'sjb-toast-wrap';
-                document.body.appendChild(wrap);
-            }
-
-            wrap.textContent = '';
-
-            const item = document.createElement('div');
-            item.className = 'sjb-toast sjb-toast-' + safeLevel;
-            item.setAttribute('role', 'status');
-            item.textContent = message;
-            wrap.appendChild(item);
-
-            window.clearTimeout(toastTimer);
-            toastTimer = window.setTimeout(function () {
-                item.remove();
-            }, 4000);
-        };
 
         return fetch(window.sjbTurnstile.ajaxUrl, {
             method: 'POST',
@@ -125,6 +131,88 @@
             });
         });
     });
+
+    const testButton = document.getElementById('sjb-turnstile-test');
+    if (testButton) {
+        let widgetId = null;
+        let verifying = false;
+
+        testButton.addEventListener('click', function () {
+            const siteInput = document.getElementById('sjb-turnstile-site-key');
+            const secretInput = document.getElementById('sjb-turnstile-secret-key');
+            const box = document.getElementById('sjb-turnstile-test-box');
+            const mount = document.getElementById('sjb-turnstile-test-widget');
+            const siteKey = siteInput ? siteInput.value.trim() : '';
+            const secretKey = secretInput ? secretInput.value.trim() : '';
+
+            if (!siteKey || !secretKey) {
+                show('warning', window.sjbTurnstile.i18n.testKeys);
+                return;
+            }
+
+            if (box) {
+                box.hidden = false;
+            }
+
+            testButton.disabled = true;
+
+            const paint = function () {
+                try {
+                    if (widgetId !== null && window.turnstile) {
+                        window.turnstile.remove(widgetId);
+                        widgetId = null;
+                    }
+
+                    if (mount) {
+                        mount.textContent = '';
+                    }
+
+                    widgetId = window.turnstile.render(mount, {
+                        sitekey: siteKey,
+                        theme: 'auto',
+                        size: 'normal',
+                        callback: function (token) {
+                            verifying = true;
+                            testButton.disabled = true;
+                            request('test_keys', {
+                                site_key: siteKey,
+                                secret_key: secretKey,
+                                'cf-turnstile-response': token,
+                            }).finally(function () {
+                                verifying = false;
+                                testButton.disabled = false;
+                            });
+                        },
+                        'error-callback': function () {
+                            show('error', window.sjbTurnstile.i18n.testWidget);
+                            testButton.disabled = false;
+                        },
+                    });
+                    if (!verifying) {
+                        testButton.disabled = false;
+                    }
+                } catch (error) {
+                    show('error', window.sjbTurnstile.i18n.testWidget);
+                    testButton.disabled = false;
+                }
+            };
+
+            if (window.turnstile) {
+                paint();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+            script.async = true;
+            script.onload = paint;
+            script.onerror = function () {
+                show('error', window.sjbTurnstile.i18n.network);
+                testButton.disabled = false;
+            };
+            document.head.appendChild(script);
+        });
+    }
 
     const exportButton = document.getElementById('sjb-turnstile-export');
     if (exportButton) {

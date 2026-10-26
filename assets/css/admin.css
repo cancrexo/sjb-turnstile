@@ -87,6 +87,20 @@
     flex-basis: 19.2px;
 }
 
+.sjb-turnstile-key-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sjb-turnstile-test {
+    margin-top: 0.5rem;
+}
+
+.sjb-turnstile-test[hidden] {
+    display: none;
+}
+
 .sjb-turnstile-log-actions {
     display: flex;
     gap: 0.5rem;

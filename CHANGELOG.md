@@ -6,6 +6,7 @@ Los cambios notables de SJB Turnstile. La versión del plugin es la de la cabece
 
 - La tabla de intentos se pagina de 20 en 20 por AJAX, sin recargar la pantalla, con aviso de espera, números, anterior, siguiente y selector de 20, 50 o 100.
 - Pestañas: Visualización (dónde se muestra el widget) y Configuración (intentos). La antigua Info abre Configuración.
+- Botón **Probar** en Cloudflare: muestra el widget y comprueba las claves sin guardarlas.
 
 ## 1.0.0 — 2026-10-20
 
